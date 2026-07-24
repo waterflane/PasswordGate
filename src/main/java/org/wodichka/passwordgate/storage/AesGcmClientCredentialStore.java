@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -53,6 +52,6 @@ public final class AesGcmClientCredentialStore implements ClientCredentialStore 
     @Override public void clear()throws IOException{Files.deleteIfExists(credentialFile);}
     private byte[] loadOrCreateKey()throws IOException{if(Files.exists(keyFile))return loadKey();byte[] key=new byte[32];random.nextBytes(key);try{atomicWrite(keyFile,protector.protect(key));return key;}catch(IOException e){Arrays.fill(key,(byte)0);throw e;}}
     private byte[] loadKey()throws IOException{if(!Files.exists(keyFile)||Files.size(keyFile)>1024)throw new IOException("missing or corrupted protected key");byte[] protectedKey=Files.readAllBytes(keyFile);byte[] key=protector.unprotect(protectedKey);Arrays.fill(protectedKey,(byte)0);if(key.length!=32){Arrays.fill(key,(byte)0);throw new IOException("invalid protected key");}return key;}
-    private static void atomicWrite(Path file,byte[] data)throws IOException{Files.createDirectories(file.getParent());Path temp=Files.createTempFile(file.getParent(),file.getFileName().toString(),".tmp");try{Files.write(temp,data);restrict(temp);try{Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}catch(AtomicMoveNotSupportedException e){Files.move(temp,file,StandardCopyOption.REPLACE_EXISTING);}restrict(file);}finally{Files.deleteIfExists(temp);}}
+    private static void atomicWrite(Path file,byte[] data)throws IOException{Files.createDirectories(file.getParent());Path temp=Files.createTempFile(file.getParent(),file.getFileName().toString(),".tmp");try{Files.write(temp,data);restrict(temp);Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);restrict(file);}finally{Files.deleteIfExists(temp);}}
     private static void restrict(Path file){try{Files.setPosixFilePermissions(file,EnumSet.of(PosixFilePermission.OWNER_READ,PosixFilePermission.OWNER_WRITE));}catch(IOException|UnsupportedOperationException ignored){}}
 }

@@ -11,7 +11,6 @@ import org.wodichka.passwordgate.security.Srp6aProtocol;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -59,12 +58,16 @@ public final class JsonCredentialRepository implements ServerCredentialRepositor
     @Override public Optional<CredentialRecord> find(UUID uuid) { return Optional.ofNullable(records.get(uuid)); }
     @Override public Collection<UUID> registeredUuids() { return new ArrayList<>(records.keySet()); }
     @Override public CompletableFuture<Void> save(CredentialRecord record) {
-        records.put(record.uuid(), record);
-        return CompletableFuture.runAsync(this::writeUnchecked, writer);
+        return CompletableFuture.runAsync(() -> {
+            CredentialRecord previous=records.put(record.uuid(),record);
+            try{writeUnchecked();}catch(RuntimeException e){if(previous==null)records.remove(record.uuid(),record);else records.put(record.uuid(),previous);throw e;}
+        },writer);
     }
     @Override public CompletableFuture<Boolean> remove(UUID uuid) {
-        boolean removed = records.remove(uuid) != null;
-        return CompletableFuture.supplyAsync(() -> { if (removed) writeUnchecked(); return removed; }, writer);
+        return CompletableFuture.supplyAsync(() -> {
+            CredentialRecord removed=records.remove(uuid);if(removed==null)return false;
+            try{writeUnchecked();return true;}catch(RuntimeException e){records.put(uuid,removed);throw e;}
+        },writer);
     }
 
     private void writeUnchecked() {
@@ -81,8 +84,7 @@ public final class JsonCredentialRepository implements ServerCredentialRepositor
             Path temp = Files.createTempFile(file.getParent(), file.getFileName().toString(), ".tmp");
             try {
                 Files.write(temp, bytes);
-                try { Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
-                catch (AtomicMoveNotSupportedException e) { Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING); }
+                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } finally { Files.deleteIfExists(temp); }
         }
     }

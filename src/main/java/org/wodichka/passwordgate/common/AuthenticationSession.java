@@ -6,7 +6,7 @@ import java.util.concurrent.CompletableFuture;
 
 public interface AuthenticationSession extends AutoCloseable {
     UUID id();
-    CompletableFuture<Void> completion();
+    CompletableFuture<Boolean> completion();
     void receive(AuthPacket packet, int transactionId);
     void timeout();
     @Override void close();

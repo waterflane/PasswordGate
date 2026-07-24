@@ -26,11 +26,12 @@
   "disconnect.passwordgate.missing_mod": "PasswordGate is required on the client and server.",
   "disconnect.passwordgate.no_client_password": "No client password was supplied to PasswordGate.",
   "disconnect.passwordgate.server_storage_error": "PasswordGate could not safely update the server credential store.",
+  "disconnect.passwordgate.duplicate_connection": "Another PasswordGate authentication is already active for this account.",
   "command.passwordgate.status.registered": "%s has a PasswordGate credential.",
   "command.passwordgate.status.unregistered": "%s has no PasswordGate credential.",
   "command.passwordgate.reset": "PasswordGate credential reset for %s.",
   "command.passwordgate.revoke": "PasswordGate credential revoked for %s.",
   "command.passwordgate.authorize": "%s may perform one first-join registration.",
-  "command.passwordgate.reload": "PasswordGate configuration values are watched by Forge and are current.",
+  "command.passwordgate.reload": "PasswordGate configuration applied to new connections; in-progress authentication sessions were closed.",
   "command.passwordgate.storage_error": "PasswordGate could not update its storage."
 }

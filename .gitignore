@@ -8,4 +8,6 @@ run-data/
 *.ipr
 *.iws
 *.log
+*.log.gz
 crash-reports/
+logs/

@@ -26,11 +26,12 @@
   "disconnect.passwordgate.missing_mod": "PasswordGate должен быть установлен на клиенте и сервере.",
   "disconnect.passwordgate.no_client_password": "Клиент не предоставил пароль для PasswordGate.",
   "disconnect.passwordgate.server_storage_error": "PasswordGate не смог безопасно обновить серверное хранилище.",
+  "disconnect.passwordgate.duplicate_connection": "Для этой учётной записи уже выполняется аутентификация PasswordGate.",
   "command.passwordgate.status.registered": "Для %s существует учётная запись PasswordGate.",
   "command.passwordgate.status.unregistered": "Для %s нет учётной записи PasswordGate.",
   "command.passwordgate.reset": "Учётная запись PasswordGate для %s сброшена.",
   "command.passwordgate.revoke": "Учётная запись PasswordGate для %s отозвана.",
   "command.passwordgate.authorize": "%s разрешена одна первичная регистрация.",
-  "command.passwordgate.reload": "Forge отслеживает файл конфигурации PasswordGate; текущие значения актуальны.",
+  "command.passwordgate.reload": "Конфигурация PasswordGate применена к новым подключениям; незавершённые проверки закрыты.",
   "command.passwordgate.storage_error": "Не удалось обновить хранилище PasswordGate."
 }

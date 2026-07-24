@@ -4,7 +4,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -19,5 +18,5 @@ public final class RegistrationAuthorizations {
     public boolean contains(UUID id){return ids.contains(id);}
     public synchronized void add(UUID id)throws IOException{ids.add(id);write();}
     public synchronized void consume(UUID id){if(ids.remove(id))try{write();}catch(IOException ignored){ids.add(id);}}
-    private void write()throws IOException{Files.createDirectories(file.getParent());JsonArray a=new JsonArray();ids.stream().sorted().forEach(id->a.add(id.toString()));Path t=Files.createTempFile(file.getParent(),"authorizations",".tmp");try{Files.writeString(t,a.toString(),StandardCharsets.UTF_8);try{Files.move(t,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}catch(AtomicMoveNotSupportedException e){Files.move(t,file,StandardCopyOption.REPLACE_EXISTING);}}finally{Files.deleteIfExists(t);}}
+    private void write()throws IOException{Files.createDirectories(file.getParent());JsonArray a=new JsonArray();ids.stream().sorted().forEach(id->a.add(id.toString()));Path t=Files.createTempFile(file.getParent(),"authorizations",".tmp");try{Files.writeString(t,a.toString(),StandardCharsets.UTF_8);Files.move(t,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}finally{Files.deleteIfExists(t);}}
 }

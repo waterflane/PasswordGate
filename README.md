@@ -1,14 +1,19 @@
 # PasswordGate
 
-PasswordGate is a required client-and-server Forge mod for Minecraft 1.20.1. It adds an SRP-6a password check inside Forge's login negotiation, before Minecraft creates a `ServerPlayer`, switches the connection to PLAY, sends chunks, player-list data, or world data.
+PasswordGate is a required client-and-server mod for Minecraft 1.21.1 and NeoForge 21.1. It performs mutual SRP-6a password authentication as a NeoForge configuration task, before the connection can finish configuration or create/place a `ServerPlayer`.
 
-## Installation
+## Requirements and installation
 
-Install the built JAR in the `mods` directory on both the client and the dedicated/integrated server. Java 17 and Forge 47.x for Minecraft 1.20.1 are required. A missing or version-incompatible required network channel prevents login.
+- Minecraft 1.21.1
+- NeoForge 21.1.235 or newer compatible 21.1 build
+- Java 21
+- the same PasswordGate protocol version on client and server
+
+Build with `./gradlew build` (`.\gradlew.bat build` on Windows) and copy `build/libs/passwordgate-1.0.0.jar` to the `mods` directory of both client and server. A Forge 1.20.1 JAR cannot be used with NeoForge, and this NeoForge JAR cannot be used with Forge.
 
 ## Configuration
 
-The world server config is `serverconfig/passwordgate-server.toml` (or the equivalent world server-config location):
+The world-specific server file is `<world>/serverconfig/passwordgate-server.toml`:
 
 ```toml
 enabled = true
@@ -23,33 +28,35 @@ failedAttemptWindowSeconds = 300
 temporaryLockoutSeconds = 300
 ```
 
-Forge validates the configured ranges. The client generator length is independently configurable in `config/passwordgate-client.toml` and is at least 20 characters (>128 bits with the generator alphabet).
+Ranges are 5..120 seconds for the timeout, 8..256 for minimum password length, 21..256 for generated length, 1..100 attempts, and 10..86400 seconds for failure window/lockout. The client generator length is in `config/passwordgate-client.toml`. A legacy value of 20 is corrected to 21 because the actual 70-character alphabet needs 21 characters for a direct entropy floor above 128 bits.
 
-## First registration
+NeoForge watches configuration files. `/passwordgate reload` applies the current validated snapshot to new connections and safely closes unfinished authentication sessions. `enabled` affects whether new configuration tasks are added. Timeout, registration policy, minimum length and limiter values affect new sessions; existing authenticated players are never retroactively changed.
 
-With first-join registration enabled, an authenticated online-mode UUID can register during the login handshake. The server supplies a fresh 256-bit salt, receives an SRP verifier, and then immediately requires a complete SRP proof before saving it. This is trust-on-first-use. If automatic registration is disabled, an operator can grant one registration with `/passwordgate authorize <player>`; the authorization is stored atomically and consumed after successful registration.
+## Authentication and security model
 
-Offline-mode automatic registration is disabled by default because an attacker can impersonate an offline UUID. Enabling `allowUnsafeOfflineMode` is an explicit risk acceptance and produces a server warning. Integrated single-player is treated as a locally authenticated profile.
+The unchanged cryptographic implementation is Bouncy Castle 1.78.1 SRP-6a using RFC 5054's 3072-bit group, SHA-256, a fresh server ephemeral/challenge, 256-bit account salt and mutual M1/M2 evidence. The server stores a verifier, never a password. The wire never carries a password, static password hash or reusable proof.
 
-## Password generation and local storage
+Every connection has a random session UUID and strictly increasing sequence. The state machine accepts exactly `REGISTER_REQUEST -> REGISTER_SUBMIT -> CHALLENGE -> CLIENT_PROOF -> SERVER_PROOF -> ACK` for registration, or the challenge suffix for an existing account. Wrong-session, replayed, duplicate, malformed, oversized and out-of-order messages disconnect before play. Only one unfinished session per authenticated UUID is allowed.
 
-The startup screen appears before the normal title screen. It supports hidden input, show/hide, secure generation, copy, replacement confirmation, and local reset confirmation. Generation uses `SecureRandom`, a non-ambiguous upper/lower/digit/special alphabet, and guarantees every category.
+The configuration task is completed only after M2 is checked by the client, ACK is received, and the server record is atomically persisted. Vanilla creates and places the player only after all configuration tasks and `ServerboundFinishConfigurationPacket`; therefore an unauthenticated connection has no `ServerPlayer`, world presence, chunks, Tab entry or play payloads. SRP and client registration calculations run on dedicated crypto workers; state transitions return to the game executor. The timeout uses a daemon `ScheduledExecutorService`, starts on the first PasswordGate challenge/request, is independent of server ticks, and is cancelled on success, disconnect, reload and shutdown.
 
-On Windows, a random 256-bit AES key is protected with the current user's DPAPI. The password is stored in a versioned AES-256-GCM record with a fresh 96-bit nonce and 128-bit tag on every write. Files are replaced atomically; owner-only POSIX permissions are applied where supported. Passwords and temporary byte/char arrays are cleared where Java permits. Java UI controls necessarily hold an immutable `String` briefly while editing.
+Rate limiting remains keyed by UUID and address. Unknown accounts use a generated dummy SRP record when registration is not allowed, reducing account-existence leakage. PasswordGate protects against passive proof replay and online guessing; theft of a verifier database still permits offline guessing, as with any password verifier.
 
-macOS Keychain and Linux Secret Service integration are not bundled in this release. On those systems, or if DPAPI is unavailable, PasswordGate deliberately refuses persistent storage and keeps manually entered credentials only in process memory until exit. There is no plaintext, XOR, Base64-only, or machine-local hard-coded-key fallback.
+## Online/offline mode
 
-## Authentication protocol and threat model
+With `online-mode=true`, registration uses the authenticated Mojang UUID. Automatic first registration is enabled by default only for authenticated online profiles or integrated single-player. A dedicated offline-mode server logs a prominent warning and disables automatic first registration unless `allowUnsafeOfflineMode=true` explicitly accepts UUID impersonation risk. PasswordGate cannot make offline UUIDs trustworthy.
 
-The cryptographic core uses Bouncy Castle SRP-6a, RFC 5054's 3072-bit group, SHA-256, per-account salt, fresh server ephemeral values, mutual evidence messages, and a session/transaction-bound state machine. Passwords, static password hashes, reusable proofs, and local AES ciphertext are never sent. An observed proof cannot be replayed against a fresh challenge. Packet sizes, SRP ranges, message ordering, duplicate transactions, and protocol version are checked.
+## Client screen and storage
 
-The server stores only format/scheme versions, authenticated UUID, salt, verifier, registration/last-authentication timestamps, and a failure counter. `credentials.json` is bounded, parsed without Java serialization, and atomically replaced on a dedicated writer. No `.bak` containing credential material is made. The client stores only AES-GCM ciphertext plus a DPAPI-protected random AES key.
+At startup PasswordGate first attempts to decrypt the protected local credential. When a non-empty password is found, it is loaded directly into process memory and the normal title screen is shown without opening PasswordGate. The PasswordGate screen appears only when the credential is absent, unreadable or damaged. It supports hidden/show input, Enter confirmation, keyboard focus navigation, generation, clipboard copy, protected-password replacement and reset, localization and responsive layout after resize.
 
-Threats covered include passive replay, a stolen server credential file (which still permits offline guessing, as every password verifier does), malformed clients, short-term brute force by UUID/IP, and login timeout/resource cleanup. PasswordGate cannot make offline-mode UUIDs authentic, protect a compromised client process, protect a copied unlocked OS account, or prevent offline guessing after server-verifier theft. The IP limiter is intentionally looser than the UUID limiter for shared IPs. Failure responses use a dummy SRP account when registration is unavailable so account existence is not directly exposed.
+The generator uses `SecureRandom` and a 70-character unambiguous alphabet. The minimum generated length is 21 characters (>128.7 bits from the alphabet alone); the default 24 exceeds 147 bits. Uppercase, lowercase, digit and special categories are all enforced.
 
-## Reset and commands
+On Windows, a random 256-bit AES key is protected by the current user's DPAPI and the password is AES-256-GCM encrypted with a fresh 96-bit nonce and 128-bit tag. No plaintext, XOR, Base64-only, hard-coded-key or machine-ID fallback exists. If system secret storage is unavailable, persistent storage is refused; a manually entered password may remain only in process memory for that run. Java GUI widgets necessarily hold an immutable `String` while editing.
 
-Operator permission level 2 is required:
+## Commands
+
+Permission level 2 is required:
 
 ```text
 /passwordgate status <player>
@@ -59,18 +66,21 @@ Operator permission level 2 is required:
 /passwordgate reload
 ```
 
-Reset/revoke removes only the verifier record. With automatic registration disabled, run `authorize` before the player's next registration. Commands never display passwords, salts, verifiers, or proofs.
+`reset` and `revoke` atomically remove the verifier. `authorize` grants one stored first-registration authorization when automatic registration is disabled. Messages never expose salt, verifier, proof or password.
 
-## Build and tests
+## Build and verification
 
 ```powershell
 .\gradlew.bat test
 .\gradlew.bat build
+.\gradlew.bat runClient
 .\gradlew.bat runServer
 ```
 
-The tests cover generation, config bounds, SRP registration/correct/wrong password, replay and changed challenges, invalid values/packets, size limits, monotonic deadlines, rate limiting, AES-GCM corruption/nonces, atomic replacement, server serialization, format migration, and constant-time comparison behavior. For a dedicated-server smoke test, accept the generated EULA in the isolated run directory and start `runServer --args --nogui`; the main mod entry point contains no Minecraft client references and client registration is protected by `DistExecutor`.
+Unit tests cover SRP success/wrong-password/replay, packet bounds and corruption, sequence encoding, rate limits, timeout helpers, generator entropy constraints, AES-GCM integrity/fresh nonces, real Forge client fixture loading, server format 0/1 loading, future-version rejection and atomic repository writes. The development client and dedicated server have smoke-launched on Java 21; detailed port and manual handshake cases are in [PORTING.md](PORTING.md).
 
-## Porting to NeoForge 1.21.1
+## Known limitations
 
-Cryptography, protocol records, configuration validation, rate limiting, and storage are isolated from GUI code. The Forge-specific surface is limited mainly to `AuthNetwork`, `ServerEvents`, commands, and the client bootstrap, which are the intended adapter layer for a NeoForge port.
+- DPAPI persistence is Windows-only; macOS Keychain and Linux Secret Service are not bundled.
+- Registry/configuration synchronization inherent to Minecraft's configuration phase can occur before the PasswordGate task, but no player/world/chunk/Tab/play data is produced before authentication.
+- End-to-end hostile-client scenarios require two real game processes and are listed as manual checks in `PORTING.md`.
