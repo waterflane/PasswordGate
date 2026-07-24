@@ -33,7 +33,7 @@ Offline-mode automatic registration is disabled by default because an attacker c
 
 ## Password generation and local storage
 
-The startup screen appears before the normal title screen. It supports hidden input, show/hide, secure generation, copy, replacement confirmation, and local reset confirmation. Generation uses `SecureRandom`, a non-ambiguous upper/lower/digit/special alphabet, and guarantees every category.
+At startup PasswordGate first attempts to decrypt the protected local credential. If a non-empty password is found, it is loaded directly into process memory and the normal title screen opens without the PasswordGate screen. The startup screen appears only when the credential is absent, unreadable, or damaged. It supports hidden input, show/hide, secure generation, copy, replacement confirmation, and local reset confirmation. Generation uses `SecureRandom`, a non-ambiguous upper/lower/digit/special alphabet, and guarantees every category.
 
 On Windows, a random 256-bit AES key is protected with the current user's DPAPI. The password is stored in a versioned AES-256-GCM record with a fresh 96-bit nonce and 128-bit tag on every write. Files are replaced atomically; owner-only POSIX permissions are applied where supported. Passwords and temporary byte/char arrays are cleared where Java permits. Java UI controls necessarily hold an immutable `String` briefly while editing.
 
