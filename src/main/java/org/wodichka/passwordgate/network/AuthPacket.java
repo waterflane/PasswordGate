@@ -29,19 +29,19 @@ public final class AuthPacket implements IntSupplier {
     public void encode(FriendlyByteBuf b) { b.writeVarInt(version); b.writeUUID(sessionId); b.writeUUID(identity); b.writeEnum(type);b.writeVarInt(parameter); write(b,first); write(b,second); }
     public static AuthPacket decode(FriendlyByteBuf b) {
         if (b.readableBytes() > MAX_PACKET_BYTES) throw new IllegalArgumentException("oversized PasswordGate packet");
-        AuthPacket p = new AuthPacket(b.readVarInt(), b.readUUID(), b.readUUID(), b.readEnum(AuthMessageType.class),b.readVarInt(), read(b, Srp6aProtocol.MAX_INTEGER_BYTES), read(b, MAX_PROOF_BYTES));
+        AuthPacket p = new AuthPacket(b.readVarInt(), b.readUUID(), b.readUUID(), b.readEnum(AuthMessageType.class),b.readVarInt(), read(b, Srp6aProtocol.MAX_INTEGER_BYTES), read(b, Srp6aProtocol.MAX_INTEGER_BYTES));
         if (b.isReadable()) throw new IllegalArgumentException("trailing PasswordGate data");
         return p;
     }
     private void validate() {
-        if (version != VERSION || sessionId == null || identity == null || type == null || first.length > Srp6aProtocol.MAX_INTEGER_BYTES || second.length > MAX_PROOF_BYTES)
+        if (version != VERSION || sessionId == null || identity == null || type == null || first.length > Srp6aProtocol.MAX_INTEGER_BYTES || second.length > Srp6aProtocol.MAX_INTEGER_BYTES)
             throw new IllegalArgumentException("invalid PasswordGate packet");
         switch (type) {
             case REGISTER_REQUEST -> require(parameter>=8&&parameter<=256&&first.length == 32 && second.length == 0);
             case REGISTER_SUBMIT -> require(parameter==0&&first.length >= 1 && second.length == 0);
             case CHALLENGE -> require(parameter==0&&first.length == 32 && second.length >= 1);
-            case CLIENT_PROOF -> require(parameter==0&&first.length >= 1 && second.length >= 1);
-            case SERVER_PROOF -> require(parameter==0&&first.length == 0 && second.length >= 1);
+            case CLIENT_PROOF -> require(parameter==0&&first.length >= 1 && second.length >= 1 && second.length <= MAX_PROOF_BYTES);
+            case SERVER_PROOF -> require(parameter==0&&first.length == 0 && second.length >= 1 && second.length <= MAX_PROOF_BYTES);
             case ACK -> require(parameter==0&&first.length == 0 && second.length == 0);
         }
     }

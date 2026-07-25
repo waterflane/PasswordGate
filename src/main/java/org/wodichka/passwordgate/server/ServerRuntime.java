@@ -25,9 +25,9 @@ public final class ServerRuntime {
     public static synchronized void start(MinecraftServer minecraftServer)throws IOException{
         stop();server=minecraftServer;ValidatedConfig c=ServerConfig.snapshot();
         var directory=minecraftServer.getWorldPath(LevelResource.ROOT).resolve("passwordgate");JsonCredentialRepository repo=new JsonCredentialRepository(directory.resolve("credentials.json"));repo.load();repository=repo;RegistrationAuthorizations auth=new RegistrationAuthorizations(directory.resolve("registration-authorizations.json"));auth.load();authorizations=auth;
-        boolean registration=c.allowFirstJoinRegistration()&&(minecraftServer.usesAuthentication()||minecraftServer.isSingleplayer()||!c.requireOnlineModeForRegistration()||c.allowUnsafeOfflineMode());
+        boolean registration=c.allowFirstJoinRegistration();
         if(!minecraftServer.usesAuthentication()&&!minecraftServer.isSingleplayer()){
-            PasswordGate.LOGGER.warn("PasswordGate: server is in offline-mode; UUID impersonation is possible. First-join registration is {}.",registration?"EXPLICITLY ENABLED (unsafe)":"disabled");
+            PasswordGate.LOGGER.warn("PasswordGate: server is in offline-mode; UUID impersonation is possible. First-join registration is {}.",registration?"enabled":"disabled");
         }
         sessions=new ServerAuthenticationSessionManager(repo,new WindowRateLimiter(c.maxFailedAttempts(),c.failedAttemptWindowSeconds(),c.temporaryLockoutSeconds()),c.authenticationTimeoutSeconds(),c.minimumPasswordLength(),id->registration||auth.contains(id),auth::consume);
         PasswordGate.LOGGER.info("PasswordGate loaded {} credential record(s)",repo.registeredUuids().size());

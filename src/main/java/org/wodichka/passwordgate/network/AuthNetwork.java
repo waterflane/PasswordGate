@@ -8,6 +8,7 @@ import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.LoginWrapper;
 import net.minecraftforge.network.simple.SimpleChannel;
 import org.apache.commons.lang3.tuple.Pair;
 import org.wodichka.passwordgate.PasswordGate;
@@ -36,7 +37,15 @@ public final class AuthNetwork {
     public static int nextTransaction(){return TRANSACTION.updateAndGet(v->v==Integer.MAX_VALUE?0x40000000:v+1);}
     public static void sendLogin(Connection connection,AuthPacket packet,int transaction){
         FriendlyByteBuf data=new FriendlyByteBuf(Unpooled.buffer());channel.encodeMessage(packet,data);
-        connection.send(NetworkDirection.LOGIN_TO_CLIENT.buildPacket(Pair.of(data,transaction),ID).getThis());
+        FriendlyByteBuf wrapped=wrapLoginPayload(data);
+        connection.send(NetworkDirection.LOGIN_TO_CLIENT.buildPacket(Pair.of(wrapped,transaction),LoginWrapper.WRAPPER).getThis());
+    }
+    static FriendlyByteBuf wrapLoginPayload(FriendlyByteBuf payload){
+        FriendlyByteBuf wrapped=new FriendlyByteBuf(Unpooled.buffer());
+        wrapped.writeResourceLocation(ID);
+        wrapped.writeVarInt(payload.readableBytes());
+        wrapped.writeBytes(payload,payload.readerIndex(),payload.readableBytes());
+        return wrapped;
     }
     public static void reply(AuthPacket packet,NetworkEvent.Context ctx){channel.reply(packet,ctx);}
 }
