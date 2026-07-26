@@ -44,5 +44,5 @@ final class ServerAuthenticationSessionManager implements AuthenticationSessionM
     @Override public void receive(Connection c,AuthPacket p,int ignored){receive(c,p);}
     void receive(Connection c,AuthPacket p){ServerAuthenticationSession s=sessions.get(c);if(s!=null)s.receive(p,p.sequence());else c.disconnect(net.minecraft.network.chat.Component.translatable("disconnect.passwordgate.malformed_packet"));}
     @Override public void disconnected(Connection c){ServerAuthenticationSession s=sessions.remove(c);if(s!=null){identities.remove(s.identity(),s);s.close();}}
-    @Override public void close(){sessions.values().forEach(ServerAuthenticationSession::close);sessions.clear();identities.clear();scheduler.shutdownNow();crypto.shutdownNow();}
+    @Override public void close(){sessions.values().forEach(ServerAuthenticationSession::abort);sessions.clear();identities.clear();scheduler.shutdownNow();crypto.shutdownNow();}
 }

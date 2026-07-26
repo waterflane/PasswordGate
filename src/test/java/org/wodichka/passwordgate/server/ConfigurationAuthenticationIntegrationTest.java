@@ -49,6 +49,12 @@ class ConfigurationAuthenticationIntegrationTest {
         assertTrue(h.session.completion().join());assertEquals(registration.verifier(),repository.record.verifier());
     }
 
+    @Test void abortCompletesConfigurationAsFailedInsteadOfLeavingItPending(){
+        UUID id=UUID.randomUUID();Harness h=start(id,new MemoryRepository(null),true);
+        h.take(AuthMessageType.REGISTER_REQUEST);h.session.abort();
+        assertFalse(h.session.completion().join());
+    }
+
     private Harness start(UUID id,MemoryRepository repository,boolean registrationAllowed){
         Connection connection=new Connection(PacketFlow.SERVERBOUND);new EmbeddedChannel(connection);List<AuthPacket> sent=new ArrayList<>();
         var session=new ServerAuthenticationSession(connection,id,repository,new WindowRateLimiter(5,300,300),p->sent.add((AuthPacket)p),scheduler,Runnable::run,Runnable::run,15,12,registrationAllowed,()->{},()->{});

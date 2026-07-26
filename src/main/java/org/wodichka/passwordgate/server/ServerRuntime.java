@@ -27,9 +27,9 @@ public final class ServerRuntime {
     public static synchronized void start(MinecraftServer minecraftServer)throws IOException{
         stop();server=minecraftServer;ValidatedConfig c=ServerConfig.snapshot();
         var directory=minecraftServer.getWorldPath(LevelResource.ROOT).resolve("passwordgate");JsonCredentialRepository repo=new JsonCredentialRepository(directory.resolve("credentials.json"));repo.load();repository=repo;RegistrationAuthorizations auth=new RegistrationAuthorizations(directory.resolve("registration-authorizations.json"));auth.load();authorizations=auth;
-        boolean registration=c.allowFirstJoinRegistration()&&(minecraftServer.usesAuthentication()||minecraftServer.isSingleplayer()||!c.requireOnlineModeForRegistration()||c.allowUnsafeOfflineMode());
+        boolean registration=c.allowFirstJoinRegistration();
         if(!minecraftServer.usesAuthentication()&&!minecraftServer.isSingleplayer()){
-            PasswordGate.LOGGER.warn("PasswordGate: server is in offline-mode; UUID impersonation is possible. First-join registration is {}.",registration?"EXPLICITLY ENABLED (unsafe)":"disabled");
+            PasswordGate.LOGGER.warn("PasswordGate: server is in offline-mode; UUID impersonation is possible. First-join registration is {}.",registration?"enabled":"disabled");
         }
         sessions=createManager(c,registration);
         PasswordGate.LOGGER.info("PasswordGate loaded {} credential record(s)",repo.registeredUuids().size());
@@ -37,7 +37,7 @@ public final class ServerRuntime {
     private static ServerAuthenticationSessionManager createManager(ValidatedConfig c,boolean registration){return new ServerAuthenticationSessionManager(repository,new WindowRateLimiter(c.maxFailedAttempts(),c.failedAttemptWindowSeconds(),c.temporaryLockoutSeconds()),c.authenticationTimeoutSeconds(),c.minimumPasswordLength(),id->registration||authorizations.contains(id),authorizations::consume,server::execute);}
     public static synchronized void reloadFromConfig(){
         MinecraftServer current=server;if(current==null||repository==null||authorizations==null)return;
-        Runnable reload=()->{synchronized(ServerRuntime.class){if(server!=current)return;ValidatedConfig c=ServerConfig.snapshot();boolean registration=c.allowFirstJoinRegistration()&&(current.usesAuthentication()||current.isSingleplayer()||!c.requireOnlineModeForRegistration()||c.allowUnsafeOfflineMode());ServerAuthenticationSessionManager old=sessions;sessions=createManager(c,registration);if(old!=null)old.close();PasswordGate.LOGGER.info("PasswordGate server configuration reloaded; in-progress authentication sessions were closed");}};
+        Runnable reload=()->{synchronized(ServerRuntime.class){if(server!=current)return;ValidatedConfig c=ServerConfig.snapshot();boolean registration=c.allowFirstJoinRegistration();ServerAuthenticationSessionManager old=sessions;sessions=createManager(c,registration);if(old!=null)old.close();PasswordGate.LOGGER.info("PasswordGate server configuration reloaded; in-progress authentication sessions were closed");}};
         if(current.isSameThread())reload.run();else current.execute(reload);
     }
     public static AuthenticationSession begin(Connection connection,GameProfile profile,Consumer<CustomPacketPayload> sender){ServerAuthenticationSessionManager manager=sessions;if(manager==null)throw new IllegalStateException("PasswordGate server is not ready");UUID uuid=profile.getId()!=null?profile.getId():UUIDUtil.createOfflinePlayerUUID(profile.getName());return manager.begin(connection,uuid,sender);}

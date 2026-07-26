@@ -117,6 +117,12 @@ final class ServerAuthenticationSession implements AuthenticationSession {
     }
 
     void rejectDuplicate(){mainExecutor.accept(()->fail("disconnect.passwordgate.duplicate_connection",false));}
+    void abort(){
+        boolean disconnect;
+        synchronized(this){disconnect=state!=State.COMPLETE&&state!=State.CLOSED;}
+        close();
+        if(disconnect&&connection.isConnected())mainExecutor.accept(()->disconnect(Component.translatable("disconnect.passwordgate.authentication_failed")));
+    }
     private void malformed(){fail("disconnect.passwordgate.malformed_packet",true);}
     private synchronized void fail(String key,boolean count){
         if(state==State.CLOSED||state==State.COMPLETE)return;state=State.CLOSED;if(timeout!=null)timeout.cancel(false);if(count)limiter.recordFailure(identity,address,System.nanoTime());

@@ -1,9 +1,13 @@
 .gradle/
 build/
+dist/
 out/
 run/
 run-data/
 .idea/
+.agents/
+.codex-build/
+.forge-worktree/
 *.iml
 *.ipr
 *.iws

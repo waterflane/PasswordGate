@@ -68,6 +68,16 @@ tasks.named('jar', Jar).configure {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from {
         configurations.shade.collect { it.isDirectory() ? it : zipTree(it) }
+    } {
+        include 'org/bouncycastle/crypto/agreement/srp/SRP6Client.class'
+        include 'org/bouncycastle/crypto/agreement/srp/SRP6Server.class'
+        include 'org/bouncycastle/crypto/agreement/srp/SRP6Util.class'
+        include 'org/bouncycastle/crypto/agreement/srp/SRP6VerifierGenerator.class'
+        include 'org/bouncycastle/crypto/params/SRP6GroupParameters.class'
+        include 'org/bouncycastle/crypto/CryptoException.class'
+        include 'org/bouncycastle/crypto/Digest.class'
+        include 'org/bouncycastle/util/BigIntegers*.class'
+        include 'org/bouncycastle/LICENSE.class'
     }
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/versions/9/module-info.class'
     manifest {

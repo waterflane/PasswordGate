@@ -7,8 +7,8 @@ public final class ServerConfig {
     public static final ModConfigSpec.BooleanValue ENABLED = B.define("enabled", true);
     public static final ModConfigSpec.IntValue TIMEOUT = B.defineInRange("authenticationTimeoutSeconds", 15, 5, 120);
     public static final ModConfigSpec.BooleanValue FIRST_JOIN = B.define("allowFirstJoinRegistration", true);
-    public static final ModConfigSpec.BooleanValue REQUIRE_ONLINE = B.define("requireOnlineModeForRegistration", true);
-    public static final ModConfigSpec.BooleanValue UNSAFE_OFFLINE = B.comment("Explicit opt-in: offline UUIDs can be impersonated.").define("allowUnsafeOfflineMode", false);
+    public static final ModConfigSpec.BooleanValue REQUIRE_ONLINE = B.comment("Legacy compatibility option; offline-mode no longer blocks PasswordGate registration.").define("requireOnlineModeForRegistration", false);
+    public static final ModConfigSpec.BooleanValue UNSAFE_OFFLINE = B.comment("Legacy compatibility option; offline-mode no longer blocks PasswordGate registration.").define("allowUnsafeOfflineMode", true);
     public static final ModConfigSpec.IntValue MIN_PASSWORD = B.defineInRange("minimumPasswordLength", 12, 8, 256);
     public static final ModConfigSpec.IntValue GENERATED_LENGTH = B.defineInRange("generatedPasswordLength", 24, 21, 256);
     public static final ModConfigSpec.IntValue MAX_FAILURES = B.defineInRange("maxFailedAttempts", 5, 1, 100);

@@ -23,12 +23,17 @@ public final class ClientAuthController {
     private static UUID session;
     private static PasswordAuthProtocol.ClientExchange exchange;
     private static State state = State.IDLE;
+    private static long generation;
     private ClientAuthController() {}
 
     public static synchronized void receive(AuthPacket packet, IPayloadContext context) {
-        if (session != null && !session.equals(packet.sessionId())) { disconnect(context,"disconnect.passwordgate.malformed_packet"); return; }
+        if (session != null && !session.equals(packet.sessionId())) {
+            if (!isInitial(packet)) { disconnect(context,"disconnect.passwordgate.malformed_packet"); return; }
+            reset();
+        }
         if (state == State.COMPUTING) { disconnect(context,"disconnect.passwordgate.malformed_packet"); return; }
-        session=packet.sessionId();
+        if (session == null) { session=packet.sessionId(); generation++; }
+        long attempt=generation;
         char[] password=ClientSecrets.copy();
         if(password==null){disconnect(context,"disconnect.passwordgate.no_client_password");return;}
         byte[] identity=packet.identity().toString().getBytes(StandardCharsets.UTF_8);
@@ -36,18 +41,18 @@ public final class ClientAuthController {
             if(packet.messageType()==AuthMessageType.REGISTER_REQUEST && (state==State.IDLE || state==State.WAIT_CHALLENGE)) {
                 if(password.length<packet.parameter()){disconnect(context,"disconnect.passwordgate.authentication_failed");return;}
                 state=State.COMPUTING;
-                submit(context, password, () -> {
+                submit(context, password, packet.sessionId(), attempt, () -> {
                     PasswordAuthProtocol.Registration registration=new Srp6aProtocol().createRegistration(identity,password,packet.first());
-                    return new AuthPacket(session,packet.identity(),AuthMessageType.REGISTER_SUBMIT,Srp6aProtocol.unsigned(registration.verifier()),null).withSequence(packet.sequence());
+                    return new AuthPacket(packet.sessionId(),packet.identity(),AuthMessageType.REGISTER_SUBMIT,Srp6aProtocol.unsigned(registration.verifier()),null).withSequence(packet.sequence());
                 }, State.WAIT_CHALLENGE);
                 return;
             }
             if(packet.messageType()==AuthMessageType.CHALLENGE && (state==State.IDLE || state==State.WAIT_CHALLENGE)) {
                 state=State.COMPUTING;
-                submit(context, password, () -> {
+                submit(context, password, packet.sessionId(), attempt, () -> {
                     PasswordAuthProtocol.ClientExchange next=new Srp6aProtocol().startClient(identity,password,packet.first(),new BigInteger(1,packet.second()));
                     synchronized(ClientAuthController.class){if(exchange!=null)exchange.close();exchange=next;}
-                    return new AuthPacket(session,packet.identity(),AuthMessageType.CLIENT_PROOF,Srp6aProtocol.unsigned(next.publicValue()),next.clientProof()).withSequence(packet.sequence());
+                    return new AuthPacket(packet.sessionId(),packet.identity(),AuthMessageType.CLIENT_PROOF,Srp6aProtocol.unsigned(next.publicValue()),next.clientProof()).withSequence(packet.sequence());
                 }, State.WAIT_SERVER_PROOF);
                 return;
             }
@@ -59,16 +64,35 @@ public final class ClientAuthController {
         } catch(RuntimeException e) { Arrays.fill(password,'\0'); disconnect(context,"disconnect.passwordgate.authentication_failed"); }
     }
 
-    private static void submit(IPayloadContext context, char[] password, java.util.concurrent.Callable<AuthPacket> job, State next) {
+    private static void submit(IPayloadContext context, char[] password, UUID expectedSession, long expectedGeneration,
+                               java.util.concurrent.Callable<AuthPacket> job, State next) {
         CRYPTO.submit(() -> {
             AuthPacket reply;
             try { reply=job.call(); }
-            catch(Exception e) { Arrays.fill(password,'\0'); Minecraft.getInstance().execute(() -> disconnect(context,"disconnect.passwordgate.authentication_failed")); return; }
+            catch(Exception e) {
+                Arrays.fill(password,'\0');
+                Minecraft.getInstance().execute(() -> {
+                    synchronized(ClientAuthController.class) {
+                        if(generation!=expectedGeneration||!expectedSession.equals(session))return;
+                    }
+                    disconnect(context,"disconnect.passwordgate.authentication_failed");
+                });
+                return;
+            }
             Arrays.fill(password,'\0');
-            Minecraft.getInstance().execute(() -> { synchronized(ClientAuthController.class){if(state!=State.COMPUTING)return;state=next;} context.reply(reply); });
+            Minecraft.getInstance().execute(() -> {
+                synchronized(ClientAuthController.class){
+                    if(state!=State.COMPUTING||generation!=expectedGeneration||!expectedSession.equals(session))return;
+                    state=next;
+                }
+                context.reply(reply);
+            });
         });
     }
-    private static synchronized void reset(){if(exchange!=null)exchange.close();exchange=null;session=null;state=State.IDLE;}
+    static boolean isInitial(AuthPacket packet){
+        return packet.sequence()==1&&(packet.messageType()==AuthMessageType.REGISTER_REQUEST||packet.messageType()==AuthMessageType.CHALLENGE);
+    }
+    private static synchronized void reset(){generation++;if(exchange!=null)exchange.close();exchange=null;session=null;state=State.IDLE;}
     public static void disconnectCleanup(){reset();}
     private static void disconnect(IPayloadContext context,String key){reset();context.disconnect(Component.translatable(key));}
 }
